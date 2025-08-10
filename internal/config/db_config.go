@@ -51,7 +51,7 @@ func LoadDBConfig() *DBConfig {
 		DBPort:            os.Getenv("POSTGRES_PORT"),
 		DBUser:            os.Getenv("POSTGRES_USER"),
 		DBPassword:        os.Getenv("POSTGRES_PASSWORD"),
-		DBName:            os.Getenv("POSTGRES_NAME"),
+		DBName:            os.Getenv("POSTGRES_DB"),
 		DBSSLMode:         os.Getenv("POSTGRES_SSLMODE"),
 		DBMaxOpenConns:    MaxOpenConns,
 		DBMaxIdleConns:    DBMaxIdleConns,
