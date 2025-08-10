@@ -12,6 +12,8 @@ import (
 )
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	// Инициализируем БД
 	psqlDB := db.InitPsqlDB()
 	defer psqlDB.Close()
@@ -20,59 +22,72 @@ func main() {
 	orderRepo := repository.NewOrderRepo(psqlDB)
 
 	// Тестовый заказ
-	testOrder := &models.Order{
-		OrderUID:    "b563feb7b2b84b6test",
-		TrackNumber: "WBILMTESTTRACK",
-		Entry:       "WBIL",
+	testOrder := models.Order{
+		OrderUID:    "a1b2c3d4-e5f6-7890-1234-56789abcdef0", // новый UUID
+		TrackNumber: "TRACK1234567890",
+		Entry:       "WEB",
 		Delivery: models.Delivery{
-			Name:    "Test Testov",
-			Phone:   "+9720000000",
-			Zip:     "2639809",
-			City:    "Kiryat Mozkin",
-			Address: "Ploshad Mira 15",
-			Region:  "Kraiot",
-			Email:   "test@gmail.com",
+			Name:    "Доставка Плюс",
+			Phone:   "+7 999 888 77 66",
+			Zip:     "123456",
+			City:    "Москва",
+			Address: "ул. Новый Арбат, д. 10",
+			Region:  "Москва",
+			Email:   "delivery@example.com",
 		},
 		Payment: models.Payment{
-			Transaction:  "b563feb7b2b84b6test",
-			RequestID:    "",
-			Currency:     "USD",
-			Provider:     "wbpay",
-			Amount:       1817,
-			PaymentDT:    1637907727,
-			Bank:         "alpha",
-			DeliveryCost: 1500,
-			GoodsTotal:   317,
+			Transaction:  "tx9876543210",
+			RequestID:    "req0987654321",
+			Currency:     "RUB",
+			Provider:     "Sberbank",
+			Amount:       14999,
+			PaymentDT:    1688700000,
+			Bank:         "Сбербанк",
+			DeliveryCost: 350,
+			GoodsTotal:   14649,
 			CustomFee:    0,
 		},
+		DeliveryService:   "DHL",
+		Locale:            "ru",
+		InternalSignature: "sig0987654321",
+		CustomerID:        "cust123456",
+		ShardKey:          5,
+		SmID:              1234567890,
+		DateCreated:       time.Date(2025, 8, 10, 22, 30, 0, 0, time.UTC),
+		OofShard:          1,
 		Items: []models.Item{
 			{
-				ChrtID:      9934930,
-				TrackNumber: "WBILMTESTTRACK",
-				Price:       453,
-				Rid:         "ab4219087a764ae0btest",
-				Name:        "Mascaras",
-				Sale:        30,
-				Size:        "0",
-				TotalPrice:  317,
-				NMID:        2389212,
-				Brand:       "Vivienne Sabo",
-				Status:      202,
+				ChrtID:      555555,
+				TrackNumber: "TRACK1234567890",
+				Price:       4999,
+				Rid:         "RID555",
+				Name:        "Новые Кроссовки",
+				Sale:        15,
+				Size:        "42",
+				TotalPrice:  4249,
+				NMID:        111111,
+				Brand:       "Nike",
+				Status:      1,
+			},
+			{
+				ChrtID:      666666,
+				TrackNumber: "TRACK1234567890",
+				Price:       9999,
+				Rid:         "RID666",
+				Name:        "Куртка зимняя",
+				Sale:        5,
+				Size:        "L",
+				TotalPrice:  9499,
+				NMID:        222222,
+				Brand:       "Adidas",
+				Status:      1,
 			},
 		},
-		Locale:            "en",
-		InternalSignature: "",
-		CustomerID:        "test",
-		DeliveryService:   "meest",
-		ShardKey:          9,
-		SmID:              99,
-		DateCreated:       time.Date(2021, 11, 26, 6, 22, 19, 0, time.UTC),
-		OofShard:          1,
 	}
 
 	// Сохраняем заказ
 	fmt.Println("Сохраняем заказ...")
-	err := orderRepo.SaveOrder(testOrder)
+	err := orderRepo.SaveOrder(&testOrder)
 	if err != nil {
 		log.Fatalf("Ошибка сохранения заказа: %v", err)
 	}

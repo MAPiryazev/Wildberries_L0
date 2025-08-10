@@ -137,6 +137,116 @@ func (orderRepo *orderRepo) SaveOrder(order *models.Order) error {
 }
 
 // GetOrderById implements OrderRepository.
-func (o *orderRepo) GetOrderById(id string) (*models.Order, error) {
-	panic("unimplemented")
+func (orderRepo *orderRepo) GetOrderById(id string) (*models.Order, error) {
+	var order models.Order
+
+	// Основной заказ без factitems и brand
+	err := orderRepo.db.QueryRow(`
+        SELECT 
+            fo.order_uid, fo.track_number, fo.entry, fo.locale, fo.internal_signature, fo.customer_id,
+            fo.shardkey, fo.sm_id, fo.date_created, fo.oof_shard,
+            d.name, d.phone, d.zip, d.address, d.email,
+            c.name, r.name,
+            p.transaction, p.request_id, cr.name, p.provider, p.amount, p.payment_dt,
+            bn.name, p.delivery_cost, p.goods_total, p.custom_fee,
+            ds.name
+        FROM factorders fo
+        LEFT JOIN delivery d ON fo.delivery_id = d.id
+        LEFT JOIN city c ON d.city_id = c.id
+        LEFT JOIN region r ON d.region_id = r.id
+        LEFT JOIN payment p ON fo.payment_id = p.id
+        LEFT JOIN currency cr ON p.currency_id = cr.id
+        LEFT JOIN bank bn ON p.bank_id = bn.id
+        LEFT JOIN delivery_service ds ON fo.delivery_service_id = ds.id
+        WHERE fo.order_uid = $1
+    `, id).Scan(
+		&order.OrderUID,
+		&order.TrackNumber,
+		&order.Entry,
+		&order.Locale,
+		&order.InternalSignature,
+		&order.CustomerID,
+		&order.ShardKey,
+		&order.SmID,
+		&order.DateCreated,
+		&order.OofShard,
+		&order.Delivery.Name,
+		&order.Delivery.Phone,
+		&order.Delivery.Zip,
+		&order.Delivery.Address,
+		&order.Delivery.Email,
+		&order.Delivery.City,
+		&order.Delivery.Region,
+		&order.Payment.Transaction,
+		&order.Payment.RequestID,
+		&order.Payment.Currency,
+		&order.Payment.Provider,
+		&order.Payment.Amount,
+		&order.Payment.PaymentDT,
+		&order.Payment.Bank,
+		&order.Payment.DeliveryCost,
+		&order.Payment.GoodsTotal,
+		&order.Payment.CustomFee,
+		&order.DeliveryService,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // заказ не найден
+		}
+		return nil, err
+	}
+
+	// Теперь подтягиваем items
+	rows, err := orderRepo.db.Query(`
+        SELECT chrt_id, track_number, price, rid, name, sale, size, total_price, nm_id, brand_id, status
+        FROM factitems
+        WHERE order_uid = $1
+    `, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []models.Item
+	for rows.Next() {
+		var item models.Item
+		var brandID int
+		err := rows.Scan(
+			&item.ChrtID,
+			&item.TrackNumber,
+			&item.Price,
+			&item.Rid,
+			&item.Name,
+			&item.Sale,
+			&item.Size,
+			&item.TotalPrice,
+			&item.NMID,
+			&brandID,
+			&item.Status,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		brandName, err := orderRepo.brandNameByID(brandID)
+		if err != nil {
+			return nil, err
+		}
+		item.Brand = brandName
+
+		items = append(items, item)
+	}
+	order.Items = items
+
+	return &order, nil
+}
+
+// Новая вспомогательная функция brandNameByID без транзакции
+func (orderRepo *orderRepo) brandNameByID(id int) (string, error) {
+	var name string
+	err := orderRepo.db.QueryRow(`SELECT name FROM brand WHERE id = $1`, id).Scan(&name)
+	if err != nil {
+		return "", err
+	}
+	return name, nil
 }
