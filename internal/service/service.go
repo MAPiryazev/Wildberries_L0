@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"log"
 	"sync"
 
 	models "github.com/MAPiryazev/Wildberries_L0/internal/model"
@@ -23,6 +24,7 @@ func (orderService *orderService) GetOrderByID(id string) (*models.Order, error)
 	orderService.mu.RLock()
 	if order, ok := orderService.cache[id]; ok {
 		orderService.mu.RUnlock()
+		log.Println("Заказ ", order.OrderUID, " нашелся в кэше")
 		return order, nil
 	}
 	orderService.mu.RUnlock()
@@ -53,9 +55,21 @@ func (orderService *orderService) SaveOrder(order *models.Order) error {
 	return nil
 }
 
-func NewOrderService(repo repository.OrderRepository) OrderService {
+func NewOrderService(repo repository.OrderRepository, preloadCount int) (OrderService, error) {
+	cache := make(map[string]*models.Order)
+
+	if preloadCount > 0 {
+		orders, err := repo.GetLastNOrders(preloadCount)
+		if err != nil {
+			return nil, err
+		}
+		for _, order := range orders {
+			cache[order.OrderUID] = order
+		}
+	}
+
 	return &orderService{
 		repo:  repo,
-		cache: make(map[string]*models.Order),
-	}
+		cache: cache,
+	}, nil
 }

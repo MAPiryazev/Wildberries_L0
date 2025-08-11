@@ -9,6 +9,7 @@ import (
 type OrderRepository interface {
 	SaveOrder(order *models.Order) error
 	GetOrderById(id string) (*models.Order, error)
+	GetLastNOrders(limit int) ([]*models.Order, error) // <-- добавляем сюда
 }
 
 type orderRepo struct {
@@ -241,7 +242,7 @@ func (orderRepo *orderRepo) GetOrderById(id string) (*models.Order, error) {
 	return &order, nil
 }
 
-// Новая вспомогательная функция brandNameByID без транзакции
+// функция brandNameByID без транзакции
 func (orderRepo *orderRepo) brandNameByID(id int) (string, error) {
 	var name string
 	err := orderRepo.db.QueryRow(`SELECT name FROM brand WHERE id = $1`, id).Scan(&name)
@@ -249,4 +250,39 @@ func (orderRepo *orderRepo) brandNameByID(id int) (string, error) {
 		return "", err
 	}
 	return name, nil
+}
+
+func (orderRepo *orderRepo) GetLastNOrders(limit int) ([]*models.Order, error) {
+	rows, err := orderRepo.db.Query(`
+        SELECT order_uid
+        FROM factorders
+        ORDER BY date_created DESC
+        LIMIT $1
+    `, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var uids []string
+	for rows.Next() {
+		var uid string
+		if err := rows.Scan(&uid); err != nil {
+			return nil, err
+		}
+		uids = append(uids, uid)
+	}
+
+	var orders []*models.Order
+	for _, uid := range uids {
+		order, err := orderRepo.GetOrderById(uid)
+		if err != nil {
+			return nil, err
+		}
+		if order != nil {
+			orders = append(orders, order)
+		}
+	}
+
+	return orders, nil
 }
