@@ -24,7 +24,7 @@ func main() {
 	}
 
 	handler := handlers.NewHandler(orderService)
-	router := handlers.RoutesInit(handler) // создаём маршруты с твоим handler'ом
+	router := handlers.RoutesInit(handler)
 
 	fmt.Println("Starting server on :8081")
 	err = http.ListenAndServe(":8081", router)
