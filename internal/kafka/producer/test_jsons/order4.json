@@ -1,0 +1,49 @@
+{
+   "order_uid": "c789feb7b2b84b6test",
+   "track_number": "WBILMTESTTRACK3",
+   "entry": "WBIL",
+   "delivery": {
+      "name": "John Smith",
+      "phone": "+9723333333",
+      "zip": "2639812",
+      "city": "Eilat",
+      "address": "Sea View 3",
+      "region": "Southern District",
+      "email": "john.smith@example.com"
+   },
+   "payment": {
+      "transaction": "c789feb7b2b84b6test",
+      "request_id": "",
+      "currency": "USD",
+      "provider": "wbpay",
+      "amount": 2500,
+      "payment_dt": 1637907732,
+      "bank": "leumi",
+      "delivery_cost": 1000,
+      "goods_total": 1500,
+      "custom_fee": 0
+   },
+   "items": [
+      {
+         "chrt_id": 9934933,
+         "track_number": "WBILMTESTTRACK3",
+         "price": 750,
+         "rid": "ab4219087a764ae0btest3",
+         "name": "Smartphone",
+         "sale": 10,
+         "size": "128GB",
+         "total_price": 675,
+         "nm_id": 2389215,
+         "brand": "Samsung",
+         "status": 202
+      }
+   ],
+   "locale": "en",
+   "internal_signature": "",
+   "customer_id": "cust_3",
+   "delivery_service": "fedex",
+   "shardkey": 3,
+   "sm_id": 103,
+   "date_created": "2022-03-20T08:00:00Z",
+   "oof_shard": 3
+}

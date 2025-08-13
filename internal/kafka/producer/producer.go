@@ -7,17 +7,54 @@ import (
 	"io/ioutil"
 	"log"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	models "github.com/MAPiryazev/Wildberries_L0/internal/model"
 	"github.com/segmentio/kafka-go"
 )
 
+const (
+	kafkaBroker = "localhost:29092"
+	topicName   = "orders"
+)
+
+func createTopic() error {
+	conn, err := kafka.Dial("tcp", kafkaBroker)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	controller, err := conn.Controller()
+	if err != nil {
+		return err
+	}
+
+	// Собираем правильный адрес контроллера
+	address := controller.Host + ":" + strconv.Itoa(int(controller.Port))
+
+	connController, err := kafka.Dial("tcp", address)
+	if err != nil {
+		return err
+	}
+	defer connController.Close()
+
+	topicConfigs := []kafka.TopicConfig{
+		{
+			Topic:             topicName,
+			NumPartitions:     1,
+			ReplicationFactor: 1,
+		},
+	}
+
+	return connController.CreateTopics(topicConfigs...)
+}
+
 func produceOrder(order *models.Order) error {
-	//создаем писателя в kafka (подключение к брокеру)
 	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers:  []string{"localhost:9092"},
-		Topic:    "orders",
+		Brokers:  []string{kafkaBroker},
+		Topic:    topicName,
 		Balancer: &kafka.LeastBytes{},
 	})
 	defer writer.Close()
@@ -27,7 +64,6 @@ func produceOrder(order *models.Order) error {
 		return err
 	}
 
-	//создаем сообщение
 	msg := kafka.Message{
 		Key:   []byte(order.OrderUID),
 		Value: orderJSON,
@@ -39,29 +75,31 @@ func produceOrder(order *models.Order) error {
 		return err
 	}
 
-	log.Println("заказ отправлен в kafka ", order.OrderUID)
+	log.Println("заказ отправлен в kafka", order.OrderUID)
 	return nil
 }
 
 func main() {
+	if err := createTopic(); err != nil {
+		log.Fatalf("Не удалось создать топик: %v", err)
+	}
+
 	dir := "./test_jsons"
 
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		// Пропускаем папки, читаем только файлы с расширением .json
+
 		if !d.IsDir() && filepath.Ext(path) == ".json" {
 			log.Println("Processing file:", path)
 
-			// Читаем содержимое файла
 			data, err := ioutil.ReadFile(path)
 			if err != nil {
 				log.Println("Failed to read file:", err)
-				return nil // не останавливаем весь процесс из-за ошибки одного файла
+				return nil
 			}
 
-			// Парсим JSON в структуру заказа
 			var order models.Order
 			err = json.Unmarshal(data, &order)
 			if err != nil {
@@ -69,7 +107,6 @@ func main() {
 				return nil
 			}
 
-			// Отправляем заказ в Kafka
 			err = produceOrder(&order)
 			if err != nil {
 				log.Println("Failed to produce order:", err)

@@ -1,0 +1,49 @@
+{
+   "order_uid": "b456feb7b2b84b6test",
+   "track_number": "WBILMTESTTRACK2",
+   "entry": "WBIL",
+   "delivery": {
+      "name": "Maria Ivanova",
+      "phone": "+9722222222",
+      "zip": "2639811",
+      "city": "Haifa",
+      "address": "Carmel Street 7",
+      "region": "Haifa District",
+      "email": "maria.ivanova@example.com"
+   },
+   "payment": {
+      "transaction": "b456feb7b2b84b6test",
+      "request_id": "",
+      "currency": "USD",
+      "provider": "wbpay",
+      "amount": 1500,
+      "payment_dt": 1637907730,
+      "bank": "discount",
+      "delivery_cost": 500,
+      "goods_total": 1000,
+      "custom_fee": 0
+   },
+   "items": [
+      {
+         "chrt_id": 9934932,
+         "track_number": "WBILMTESTTRACK2",
+         "price": 1000,
+         "rid": "ab4219087a764ae0btest2",
+         "name": "Sneakers",
+         "sale": 50,
+         "size": "42",
+         "total_price": 500,
+         "nm_id": 2389214,
+         "brand": "Nike",
+         "status": 202
+      }
+   ],
+   "locale": "en",
+   "internal_signature": "",
+   "customer_id": "cust_2",
+   "delivery_service": "dhl",
+   "shardkey": 2,
+   "sm_id": 102,
+   "date_created": "2022-02-10T14:35:45Z",
+   "oof_shard": 2
+}
