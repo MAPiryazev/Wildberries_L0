@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	kafkaBroker = "localhost:29092"
+	kafkaBroker = "localhost:29092" //поменять если будет запускаться внутри контейнера
 	topicName   = "orders"
 )
 

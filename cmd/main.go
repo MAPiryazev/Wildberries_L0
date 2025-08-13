@@ -26,9 +26,9 @@ func main() {
 	handler := handlers.NewHandler(orderService)
 	router := handlers.RoutesInit(handler)
 
-	fmt.Println("Starting server on :8081")
+	fmt.Println("Запускаем api на порту :8081")
 	err = http.ListenAndServe(":8081", router)
 	if err != nil {
-		log.Fatal("Server failed to start: ", err)
+		log.Fatal("Неудачный запуск api: ", err)
 	}
 }
