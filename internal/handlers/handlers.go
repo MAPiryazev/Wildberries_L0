@@ -26,6 +26,9 @@ func RoutesInit(handler *Handler) http.Handler {
 
 	router.Get("/order/{uid}", handler.handleGetOrderByID)
 
+	fs := http.FileServer(http.Dir("../front"))
+	router.Handle("/*", fs)
+
 	return router
 }
 
