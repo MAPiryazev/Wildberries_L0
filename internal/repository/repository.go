@@ -9,7 +9,7 @@ import (
 type OrderRepository interface {
 	SaveOrder(order *models.Order) error
 	GetOrderById(id string) (*models.Order, error)
-	GetLastNOrders(limit int) ([]*models.Order, error) // <-- добавляем сюда
+	GetLastNOrders(limit int) ([]*models.Order, error)
 }
 
 type orderRepo struct {
@@ -192,7 +192,7 @@ func (orderRepo *orderRepo) GetOrderById(id string) (*models.Order, error) {
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil // заказ не найден
+			return nil, nil
 		}
 		return nil, err
 	}

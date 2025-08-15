@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strconv"
 
+	"github.com/segmentio/kafka-go"
+
+	"github.com/MAPiryazev/Wildberries_L0/internal/config"
 	models "github.com/MAPiryazev/Wildberries_L0/internal/model"
 	"github.com/MAPiryazev/Wildberries_L0/internal/service"
-	"github.com/segmentio/kafka-go"
 )
 
 type OrderConsumer struct {
@@ -17,11 +20,13 @@ type OrderConsumer struct {
 	orderSvc    service.OrderService
 }
 
-func NewOrderConsumer(broker, topic, groupID string, svc service.OrderService) *OrderConsumer {
+func NewOrderConsumer(svc service.OrderService) *OrderConsumer {
+	kafkaConfig := config.LoadKafkaConfig()
+
 	return &OrderConsumer{
-		kafkaBroker: broker,
-		topic:       topic,
-		groupID:     groupID,
+		kafkaBroker: kafkaConfig.KafkaHost + ":" + strconv.Itoa(kafkaConfig.KafkaPort),
+		topic:       kafkaConfig.KafkaTopicName,
+		groupID:     kafkaConfig.KafkaGroupID,
 		orderSvc:    svc,
 	}
 }

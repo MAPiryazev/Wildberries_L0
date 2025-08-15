@@ -23,12 +23,10 @@ func InitPsqlDB() *sql.DB {
 		log.Fatal("Ошибка подключения к БД: ", err)
 	}
 
-	// Настройки пула соединений
 	psqlDB.SetMaxOpenConns(cfg.DBMaxOpenConns)
 	psqlDB.SetMaxIdleConns(cfg.DBMaxIdleConns)
 	psqlDB.SetConnMaxLifetime(time.Duration(cfg.DBMaxConnLifeTime) * time.Minute)
 
-	// Проверка подключения
 	if err = psqlDB.Ping(); err != nil {
 		log.Fatal("Не удалось подключиться к БД: ", err)
 	}

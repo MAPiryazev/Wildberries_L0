@@ -1,4 +1,4 @@
--- 1. Вставка справочников (если нет)
+-- Вставка справочников (если нет)
 INSERT INTO city (name)
 SELECT 'Kiryat Mozkin'
 WHERE NOT EXISTS (SELECT 1 FROM city WHERE name = 'Kiryat Mozkin');
@@ -24,7 +24,7 @@ SELECT 'meest'
 WHERE NOT EXISTS (SELECT 1 FROM delivery_service WHERE name = 'meest');
 
 
--- 2. Вставка delivery
+-- Вставка delivery
 INSERT INTO delivery (name, phone, zip, city_id, address, region_id, email)
 SELECT 
     'Test Testov',
@@ -40,7 +40,7 @@ WHERE NOT EXISTS (
 );
 
 
--- 3. Вставка payment
+-- Вставка payment
 INSERT INTO payment (transaction, request_id, currency_id, provider, amount, payment_dt, bank_id, delivery_cost, goods_total, custom_fee)
 SELECT 
     'b563feb7b2b84b6test',
@@ -58,7 +58,7 @@ WHERE NOT EXISTS (
 );
 
 
--- 4. Вставка FactOrders
+-- Вставка FactOrders
 INSERT INTO FactOrders (
     order_uid, track_number, entry, delivery_id, payment_id, locale, internal_signature, customer_id, delivery_service_id, shardkey, sm_id, date_created, oof_shard
 )
@@ -82,7 +82,7 @@ JOIN delivery_service ds ON ds.name = 'meest'
 WHERE NOT EXISTS (SELECT 1 FROM FactOrders WHERE order_uid = 'b563feb7b2b84b6test');
 
 
--- 5. Вставка FactItems
+-- Вставка FactItems
 INSERT INTO FactItems (
     order_uid, chrt_id, track_number, price, rid, name, sale, size, total_price, nm_id, brand_id, status
 )

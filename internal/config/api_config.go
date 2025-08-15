@@ -14,10 +14,8 @@ type APIConfig struct {
 
 func LoadAPIConfig() *APIConfig {
 	if err := godotenv.Load(".env"); err != nil {
-		log.Printf(".env в корне не найден, пробуем ../environment/.env: %v", err)
-		// пробуем ../environment/.env
 		if err2 := godotenv.Load("../environment/.env"); err2 != nil {
-			log.Fatalln("../environment/.env тоже не найден: ", err2)
+			log.Fatalln("../environment/.env файл не найден: ", err2)
 		}
 	}
 
