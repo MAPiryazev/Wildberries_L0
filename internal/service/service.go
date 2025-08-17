@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"sync"
+	"time"
 
 	models "github.com/MAPiryazev/Wildberries_L0/internal/model"
 	"github.com/MAPiryazev/Wildberries_L0/internal/repository"
@@ -12,6 +13,7 @@ import (
 type OrderService interface {
 	GetOrderByID(id string) (*models.Order, error)
 	SaveOrder(order *models.Order) error
+	SaveOrdersBatch(orders []*models.Order) error
 }
 
 type orderService struct {
@@ -21,6 +23,12 @@ type orderService struct {
 }
 
 func (orderService *orderService) GetOrderByID(id string) (*models.Order, error) {
+	start := time.Now()
+
+	defer func() {
+		log.Printf("Время исполнения запроса: %.3f ms\n", time.Since(start).Seconds()*1000)
+	}()
+
 	orderService.mu.RLock()
 	if order, ok := orderService.cache[id]; ok {
 		orderService.mu.RUnlock()
@@ -72,4 +80,19 @@ func NewOrderService(repo repository.OrderRepository, preloadCount int) (OrderSe
 		repo:  repo,
 		cache: cache,
 	}, nil
+}
+
+func (orderService *orderService) SaveOrdersBatch(orders []*models.Order) error {
+	err := orderService.repo.SaveOrdersBatch(orders)
+	if err != nil {
+		return err
+	}
+
+	orderService.mu.Lock()
+	defer orderService.mu.Unlock()
+	for _, order := range orders {
+		orderService.cache[order.OrderUID] = order
+	}
+
+	return nil
 }

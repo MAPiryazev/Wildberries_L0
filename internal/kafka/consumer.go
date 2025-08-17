@@ -18,6 +18,7 @@ type OrderConsumer struct {
 	topic       string
 	groupID     string
 	orderSvc    service.OrderService
+	batchSize   int
 }
 
 func NewOrderConsumer(svc service.OrderService) *OrderConsumer {
@@ -28,7 +29,25 @@ func NewOrderConsumer(svc service.OrderService) *OrderConsumer {
 		topic:       kafkaConfig.KafkaTopicName,
 		groupID:     kafkaConfig.KafkaGroupID,
 		orderSvc:    svc,
+		batchSize:   5000,
 	}
+}
+
+func (consumer *OrderConsumer) fetchMessageBatch(ctx context.Context, reader *kafka.Reader, batchSize int) ([]kafka.Message, error) {
+	messages := make([]kafka.Message, 0, batchSize)
+
+	for i := 0; i < batchSize; i++ {
+		msg, err := reader.FetchMessage(ctx)
+		if err != nil {
+			if err == context.Canceled || err == context.DeadlineExceeded {
+				break
+			}
+			return messages, err
+		}
+		messages = append(messages, msg)
+	}
+
+	return messages, nil
 }
 
 func (consumer *OrderConsumer) Start(ctx context.Context) {
@@ -47,24 +66,52 @@ func (consumer *OrderConsumer) Start(ctx context.Context) {
 			log.Println("Консьюмер кафки остановлен")
 			return
 		default:
-			message, err := reader.ReadMessage(ctx)
+			msgs, err := consumer.fetchMessageBatch(ctx, reader, consumer.batchSize)
 			if err != nil {
-				log.Printf("Ошибка чтения сообщения: %v", err)
+				log.Printf("Ошибка получения батча: %v", err)
 				continue
 			}
 
-			var order models.Order
-			if err := json.Unmarshal(message.Value, &order); err != nil {
-				log.Printf("Ошибка десериализации json сообщения: %v", err)
+			if len(msgs) == 0 {
 				continue
 			}
 
-			if err := consumer.orderSvc.SaveOrder(&order); err != nil {
-				log.Printf("Ошибка при сохранении заказа в БД %s: %v", order.OrderUID, err)
-				continue
+			// Парсим все сообщения в заказы
+			var orders []*models.Order
+			for _, msg := range msgs {
+				var order models.Order
+				if err := json.Unmarshal(msg.Value, &order); err != nil {
+					log.Printf("Ошибка десериализации json сообщения: %v", err)
+					continue
+				}
+
+				// Логируем длинные значения для диагностики
+				if len(order.Locale) > 10 {
+					log.Printf("⚠️  locale слишком длинный (%d символов): '%s'", len(order.Locale), order.Locale)
+				}
+
+				for _, item := range order.Items {
+					if len(item.Size) > 10 {
+						log.Printf("⚠️  item.size слишком длинный (%d символов): '%s'", len(item.Size), item.Size)
+					}
+				}
+
+				orders = append(orders, &order)
 			}
 
-			log.Printf("Заказ %s успешно сохранен в БД", order.OrderUID)
+			// Сохраняем все заказы одним батчем
+			if len(orders) > 0 {
+				if err := consumer.orderSvc.SaveOrdersBatch(orders); err != nil {
+					log.Printf("Ошибка при батчевом сохранении %d заказов: %v", len(orders), err)
+					continue
+				}
+				log.Printf("Успешно сохранено %d заказов в БД", len(orders))
+			}
+
+			// Коммитим все сообщения из батча
+			if err := reader.CommitMessages(ctx, msgs...); err != nil {
+				log.Printf("Ошибка коммита сообщений: %v", err)
+			}
 		}
 	}
 }

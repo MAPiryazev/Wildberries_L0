@@ -2,12 +2,14 @@ package repository
 
 import (
 	"database/sql"
+	"errors"
 
 	models "github.com/MAPiryazev/Wildberries_L0/internal/model"
 )
 
 type OrderRepository interface {
 	SaveOrder(order *models.Order) error
+	SaveOrdersBatch(orders []*models.Order) error
 	GetOrderById(id string) (*models.Order, error)
 	GetLastNOrders(limit int) ([]*models.Order, error)
 }
@@ -285,4 +287,262 @@ func (orderRepo *orderRepo) GetLastNOrders(limit int) ([]*models.Order, error) {
 	}
 
 	return orders, nil
+}
+
+// SaveOrdersBatch сохраняет множество заказов в одной транзакции
+func (orderRepo *orderRepo) SaveOrdersBatch(orders []*models.Order) error {
+	if len(orders) == 0 {
+		return nil
+	}
+
+	tx, err := orderRepo.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Подготавливаем prepared statements для лучшей производительности
+	deliveryStmt, err := tx.Prepare(`INSERT INTO delivery(name, phone, zip, city_id, address, region_id, email)
+									VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`)
+	if err != nil {
+		return err
+	}
+	defer deliveryStmt.Close()
+
+	paymentStmt, err := tx.Prepare(`INSERT INTO payment(transaction, request_id, currency_id, provider, amount, payment_dt,
+													   bank_id, delivery_cost, goods_total, custom_fee)
+									VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`)
+	if err != nil {
+		return err
+	}
+	defer paymentStmt.Close()
+
+	orderStmt, err := tx.Prepare(`INSERT INTO factorders(order_uid, track_number, entry, delivery_id, payment_id, locale,
+		internal_signature, customer_id, delivery_service_id, shardkey, sm_id, date_created, oof_shard)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`)
+	if err != nil {
+		return err
+	}
+	defer orderStmt.Close()
+
+	itemStmt, err := tx.Prepare(`INSERT INTO factitems(order_uid, chrt_id, track_number, price, rid, name, sale, size, total_price,
+		nm_id, brand_id, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`)
+	if err != nil {
+		return err
+	}
+	defer itemStmt.Close()
+
+	// Кэш для lookup таблиц, чтобы избежать повторных запросов
+	cityCache := make(map[string]int)
+	regionCache := make(map[string]int)
+	currencyCache := make(map[string]int)
+	brandCache := make(map[string]int)
+	bankCache := make(map[string]int)
+	deliveryServiceCache := make(map[string]int)
+
+	// Функция для получения ID с кэшированием
+	getCityID := func(name string) (int, error) {
+		if id, exists := cityCache[name]; exists {
+			return id, nil
+		}
+		var id int
+		err := tx.QueryRow(`SELECT id FROM city WHERE name = $1`, name).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			err = tx.QueryRow(`INSERT INTO city(name) VALUES($1) RETURNING id`, name).Scan(&id)
+		}
+		if err != nil {
+			return 0, err
+		}
+		cityCache[name] = id
+		return id, nil
+	}
+
+	getRegionID := func(name string) (int, error) {
+		if id, exists := regionCache[name]; exists {
+			return id, nil
+		}
+		var id int
+		err := tx.QueryRow(`SELECT id FROM region WHERE name = $1`, name).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			err = tx.QueryRow(`INSERT INTO region(name) VALUES($1) RETURNING id`, name).Scan(&id)
+		}
+		if err != nil {
+			return 0, err
+		}
+		regionCache[name] = id
+		return id, nil
+	}
+
+	getCurrencyID := func(name string) (int, error) {
+		if id, exists := currencyCache[name]; exists {
+			return id, nil
+		}
+		var id int
+		err := tx.QueryRow(`SELECT id FROM currency WHERE name = $1`, name).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			err = tx.QueryRow(`INSERT INTO currency(name) VALUES($1) RETURNING id`, name).Scan(&id)
+		}
+		if err != nil {
+			return 0, err
+		}
+		currencyCache[name] = id
+		return id, nil
+	}
+
+	getBrandID := func(name string) (int, error) {
+		if id, exists := brandCache[name]; exists {
+			return id, nil
+		}
+		var id int
+		err := tx.QueryRow(`SELECT id FROM brand WHERE name = $1`, name).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			err = tx.QueryRow(`INSERT INTO brand(name) VALUES($1) RETURNING id`, name).Scan(&id)
+		}
+		if err != nil {
+			return 0, err
+		}
+		brandCache[name] = id
+		return id, nil
+	}
+
+	getBankID := func(name string) (int, error) {
+		if id, exists := bankCache[name]; exists {
+			return id, nil
+		}
+		var id int
+		err := tx.QueryRow(`SELECT id FROM bank WHERE name = $1`, name).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			err = tx.QueryRow(`INSERT INTO bank(name) VALUES($1) RETURNING id`, name).Scan(&id)
+		}
+		if err != nil {
+			return 0, err
+		}
+		bankCache[name] = id
+		return id, nil
+	}
+
+	getDeliveryServiceID := func(name string) (int, error) {
+		if id, exists := deliveryServiceCache[name]; exists {
+			return id, nil
+		}
+		var id int
+		err := tx.QueryRow(`SELECT id FROM delivery_service WHERE name = $1`, name).Scan(&id)
+		if errors.Is(err, sql.ErrNoRows) {
+			err = tx.QueryRow(`INSERT INTO delivery_service(name) VALUES($1) RETURNING id`, name).Scan(&id)
+		}
+		if err != nil {
+			return 0, err
+		}
+		deliveryServiceCache[name] = id
+		return id, nil
+	}
+
+	// Обрабатываем каждый заказ
+	for _, order := range orders {
+		cityID, err := getCityID(order.Delivery.City)
+		if err != nil {
+			return err
+		}
+
+		regionID, err := getRegionID(order.Delivery.Region)
+		if err != nil {
+			return err
+		}
+
+		// Вставляем delivery
+		var deliveryID int
+		err = deliveryStmt.QueryRow(
+			order.Delivery.Name,
+			order.Delivery.Phone,
+			order.Delivery.Zip,
+			cityID,
+			order.Delivery.Address,
+			regionID,
+			order.Delivery.Email,
+		).Scan(&deliveryID)
+		if err != nil {
+			return err
+		}
+
+		currencyID, err := getCurrencyID(order.Payment.Currency)
+		if err != nil {
+			return err
+		}
+
+		bankID, err := getBankID(order.Payment.Bank)
+		if err != nil {
+			return err
+		}
+
+		// Вставляем payment
+		var paymentID int
+		err = paymentStmt.QueryRow(
+			order.Payment.Transaction,
+			order.Payment.RequestID,
+			currencyID,
+			order.Payment.Provider,
+			order.Payment.Amount,
+			order.Payment.PaymentDT,
+			bankID,
+			order.Payment.DeliveryCost,
+			order.Payment.GoodsTotal,
+			order.Payment.CustomFee,
+		).Scan(&paymentID)
+		if err != nil {
+			return err
+		}
+
+		deliveryServiceID, err := getDeliveryServiceID(order.DeliveryService)
+		if err != nil {
+			return err
+		}
+
+		// Вставляем основной заказ
+		_, err = orderStmt.Exec(
+			order.OrderUID,
+			order.TrackNumber,
+			order.Entry,
+			deliveryID,
+			paymentID,
+			order.Locale,
+			order.InternalSignature,
+			order.CustomerID,
+			deliveryServiceID,
+			order.ShardKey,
+			order.SmID,
+			order.DateCreated,
+			order.OofShard,
+		)
+		if err != nil {
+			return err
+		}
+
+		// Вставляем items
+		for _, item := range order.Items {
+			brandID, err := getBrandID(item.Brand)
+			if err != nil {
+				return err
+			}
+
+			_, err = itemStmt.Exec(
+				order.OrderUID,
+				item.ChrtID,
+				item.TrackNumber,
+				item.Price,
+				item.Rid,
+				item.Name,
+				item.Sale,
+				item.Size,
+				item.TotalPrice,
+				item.NMID,
+				brandID,
+				item.Status,
+			)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return tx.Commit()
 }

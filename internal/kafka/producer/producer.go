@@ -3,11 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"io/fs"
-	"io/ioutil"
 	"log"
-	"path/filepath"
-	"strconv"
+	"os"
 	"time"
 
 	models "github.com/MAPiryazev/Wildberries_L0/internal/model"
@@ -15,107 +12,76 @@ import (
 )
 
 const (
-	kafkaBroker = "localhost:29092" //поменять если будет запускаться внутри контейнера
+	kafkaBroker = "localhost:29092"
 	topicName   = "orders"
+	batchSize   = 10000
 )
 
-func createTopic() error {
-	conn, err := kafka.Dial("tcp", kafkaBroker)
+func main() {
+	file, err := os.Open("test_jsons/orders.json")
 	if err != nil {
-		return err
+		log.Fatal("Ошибка открытия файла:", err)
 	}
-	defer conn.Close()
+	defer file.Close()
 
-	controller, err := conn.Controller()
+	dec := json.NewDecoder(file)
+
+	_, err = dec.Token()
 	if err != nil {
-		return err
+		log.Fatal("Ошибка чтения токена начала массива:", err)
 	}
 
-	// Собираем правильный адрес контроллера
-	address := controller.Host + ":" + strconv.Itoa(int(controller.Port))
-
-	connController, err := kafka.Dial("tcp", address)
-	if err != nil {
-		return err
-	}
-	defer connController.Close()
-
-	topicConfigs := []kafka.TopicConfig{
-		{
-			Topic:             topicName,
-			NumPartitions:     1,
-			ReplicationFactor: 1,
-		},
-	}
-
-	return connController.CreateTopics(topicConfigs...)
-}
-
-func produceOrder(order *models.Order) error {
 	writer := kafka.NewWriter(kafka.WriterConfig{
-		Brokers:  []string{kafkaBroker},
-		Topic:    topicName,
-		Balancer: &kafka.LeastBytes{},
+		Brokers:   []string{kafkaBroker},
+		Topic:     topicName,
+		Balancer:  &kafka.LeastBytes{},
+		BatchSize: batchSize,
 	})
 	defer writer.Close()
 
-	orderJSON, err := json.Marshal(order)
-	if err != nil {
-		return err
-	}
+	var batch []kafka.Message
+	count := 0
+	start := time.Now()
 
-	msg := kafka.Message{
-		Key:   []byte(order.OrderUID),
-		Value: orderJSON,
-		Time:  time.Now(),
-	}
+	for dec.More() {
+		var order models.Order
+		if err := dec.Decode(&order); err != nil {
+			log.Fatal("Ошибка декодирования JSON:", err)
+		}
 
-	err = writer.WriteMessages(context.Background(), msg)
-	if err != nil {
-		return err
-	}
-
-	log.Println("заказ отправлен в kafka", order.OrderUID)
-	return nil
-}
-
-func main() {
-	if err := createTopic(); err != nil {
-		log.Fatalf("Не удалось создать топик: %v", err)
-	}
-
-	dir := "./test_jsons"
-
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		orderJSON, err := json.Marshal(order)
 		if err != nil {
-			return err
+			log.Println("Ошибка маршалинга:", err)
+			continue
 		}
 
-		if !d.IsDir() && filepath.Ext(path) == ".json" {
-			log.Println("Processing file:", path)
+		batch = append(batch, kafka.Message{
+			Key:   []byte(order.OrderUID),
+			Value: orderJSON,
+			Time:  time.Now(),
+		})
 
-			data, err := ioutil.ReadFile(path)
-			if err != nil {
-				log.Println("Failed to read file:", err)
-				return nil
+		if len(batch) >= batchSize {
+			if err := writer.WriteMessages(context.Background(), batch...); err != nil {
+				log.Println("Ошибка отправки батча в Kafka:", err)
 			}
-
-			var order models.Order
-			err = json.Unmarshal(data, &order)
-			if err != nil {
-				log.Println("Failed to unmarshal JSON:", err)
-				return nil
-			}
-
-			err = produceOrder(&order)
-			if err != nil {
-				log.Println("Failed to produce order:", err)
-			}
+			count += len(batch)
+			log.Printf("Отправлено %d сообщений (%.2f сек)", count, time.Since(start).Seconds())
+			batch = batch[:0]
 		}
-		return nil
-	})
-
-	if err != nil {
-		log.Fatal("Error walking the directory:", err)
 	}
+
+	if len(batch) > 0 {
+		if err := writer.WriteMessages(context.Background(), batch...); err != nil {
+			log.Println("Ошибка отправки последнего батча:", err)
+		}
+		count += len(batch)
+	}
+
+	_, err = dec.Token()
+	if err != nil {
+		log.Fatal("Ошибка чтения конца массива:", err)
+	}
+
+	log.Printf("Готово: отправлено %d заказов за %.2f сек", count, time.Since(start).Seconds())
 }

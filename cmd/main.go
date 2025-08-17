@@ -22,7 +22,7 @@ func main() {
 	defer psqlDB.Close()
 
 	orderRepo := repository.NewOrderRepo(psqlDB)
-	orderService, err := service.NewOrderService(orderRepo, 5)
+	orderService, err := service.NewOrderService(orderRepo, 100)
 	if err != nil {
 		log.Fatal(err)
 	}
