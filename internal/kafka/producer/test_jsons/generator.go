@@ -29,13 +29,12 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 	gofakeit.Seed(time.Now().UnixNano())
 
-	writer.Write([]byte("[")) // начало массива
+	writer.Write([]byte("[")) 
 
 	for i := 0; i < totalOrders; i++ {
 		orderUID := "uid_" + strconv.Itoa(i)
 		trackNumber := "WBILMTESTTRACK" + strconv.Itoa(i%1000)
 
-		// Генерируем случайное количество товаров (1-5)
 		numItems := 1 + rand.Intn(maxItemsPerOrder)
 		items := make([]models.Item, numItems)
 		for j := 0; j < numItems; j++ {
@@ -103,24 +102,22 @@ func main() {
 		}
 
 		if i != 0 {
-			writer.Write([]byte(",")) // разделитель объектов
+			writer.Write([]byte(",")) 
 		}
 		writer.Write(data)
 
-		// Периодически сбрасываем буфер, чтобы не держать всё в памяти
 		if i%10000 == 0 {
 			writer.Flush()
 			log.Printf("Сгенерировано заказов: %d\n", i)
 		}
 	}
 
-	writer.Write([]byte("]")) // конец массива
+	writer.Write([]byte("]")) 
 	writer.Flush()
 
 	log.Println("Генерация 3 млн заказов завершена!")
 }
 
-// getShortLocale возвращает короткий код языка (максимум 10 символов)
 func getShortLocale() string {
 	locales := []string{"en", "ru", "es", "fr", "de", "it", "pt", "ja", "ko", "zh", "ar", "hi"}
 	return locales[rand.Intn(len(locales))]

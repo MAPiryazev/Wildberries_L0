@@ -76,7 +76,6 @@ func (consumer *OrderConsumer) Start(ctx context.Context) {
 				continue
 			}
 
-			// Парсим все сообщения в заказы
 			var orders []*models.Order
 			for _, msg := range msgs {
 				var order models.Order
@@ -85,21 +84,19 @@ func (consumer *OrderConsumer) Start(ctx context.Context) {
 					continue
 				}
 
-				// Логируем длинные значения для диагностики
 				if len(order.Locale) > 10 {
-					log.Printf("⚠️  locale слишком длинный (%d символов): '%s'", len(order.Locale), order.Locale)
+					log.Printf("locale слишком длинный (%d символов): '%s'", len(order.Locale), order.Locale)
 				}
 
 				for _, item := range order.Items {
 					if len(item.Size) > 10 {
-						log.Printf("⚠️  item.size слишком длинный (%d символов): '%s'", len(item.Size), item.Size)
+						log.Printf("item.size слишком длинный (%d символов): '%s'", len(item.Size), item.Size)
 					}
 				}
 
 				orders = append(orders, &order)
 			}
 
-			// Сохраняем все заказы одним батчем
 			if len(orders) > 0 {
 				if err := consumer.orderSvc.SaveOrdersBatch(orders); err != nil {
 					log.Printf("Ошибка при батчевом сохранении %d заказов: %v", len(orders), err)
@@ -108,7 +105,6 @@ func (consumer *OrderConsumer) Start(ctx context.Context) {
 				log.Printf("Успешно сохранено %d заказов в БД", len(orders))
 			}
 
-			// Коммитим все сообщения из батча
 			if err := reader.CommitMessages(ctx, msgs...); err != nil {
 				log.Printf("Ошибка коммита сообщений: %v", err)
 			}

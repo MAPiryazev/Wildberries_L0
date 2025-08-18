@@ -12,6 +12,7 @@ import (
 type OrderService interface {
 	GetOrderByID(id string) (*models.Order, error)
 	SaveOrder(order *models.Order) error
+	SaveOrdersBatch(orders []*models.Order) error
 }
 
 type orderService struct {
@@ -51,6 +52,27 @@ func (orderService *orderService) SaveOrder(order *models.Order) error {
 	orderService.mu.Lock()
 	defer orderService.mu.Unlock()
 	orderService.cache[order.OrderUID] = order
+
+	return nil
+}
+
+func (orderService *orderService) SaveOrdersBatch(orders []*models.Order) error {
+	if len(orders) == 0 {
+		return nil
+	}
+
+	if err := orderService.repo.SaveOrdersBatch(orders); err != nil {
+		return err
+	}
+
+	orderService.mu.Lock()
+	for _, order := range orders {
+		if order == nil {
+			continue
+		}
+		orderService.cache[order.OrderUID] = order
+	}
+	orderService.mu.Unlock()
 
 	return nil
 }
