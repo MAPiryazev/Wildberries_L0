@@ -1,0 +1,49 @@
+{
+   "order_uid": "a123feb7b2b84b6test",
+   "track_number": "WBILMTESTTRACK1",
+   "entry": "WBIL",
+   "delivery": {
+      "name": "Ivan Petrov",
+      "phone": "+9721111111",
+      "zip": "2639810",
+      "city": "Tel Aviv",
+      "address": "Herzl Street 12",
+      "region": "Tel Aviv District",
+      "email": "ivan.petrov@example.com"
+   },
+   "payment": {
+      "transaction": "a123feb7b2b84b6test",
+      "request_id": "",
+      "currency": "USD",
+      "provider": "wbpay",
+      "amount": 2000,
+      "payment_dt": 1637907728,
+      "bank": "hapoalim",
+      "delivery_cost": 1200,
+      "goods_total": 800,
+      "custom_fee": 0
+   },
+   "items": [
+      {
+         "chrt_id": 9934931,
+         "track_number": "WBILMTESTTRACK1",
+         "price": 500,
+         "rid": "ab4219087a764ae0btest1",
+         "name": "Backpack",
+         "sale": 20,
+         "size": "M",
+         "total_price": 400,
+         "nm_id": 2389213,
+         "brand": "Samsonite",
+         "status": 202
+      }
+   ],
+   "locale": "en",
+   "internal_signature": "",
+   "customer_id": "cust_1",
+   "delivery_service": "meest",
+   "shardkey": 1,
+   "sm_id": 101,
+   "date_created": "2022-01-15T10:12:00Z",
+   "oof_shard": 1
+}
