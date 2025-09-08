@@ -1,11 +1,22 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
 
 	"github.com/joho/godotenv"
+)
+
+var (
+	ErrParamNotFound = errors.New(`Один или несолько из критически важных параметров не был найден в env, проверьте:
+	POSTGRES_HOST
+	POSTGRES_PORT
+	POSTGRES_USER
+	POSTGRES_PASSWORD
+	POSTGRES_DB`)
 )
 
 type DBConfig struct {
@@ -20,39 +31,54 @@ type DBConfig struct {
 	DBMaxConnLifeTime int
 }
 
-func LoadDBConfig() *DBConfig {
+func LoadDBConfig() (*DBConfig, error) {
 
 	if err := godotenv.Load(".env"); err != nil {
 		if err2 := godotenv.Load("../environment/.env"); err2 != nil {
-			log.Fatalln("../environment/.env файл не найден: ", err2)
+			return nil, fmt.Errorf("%w: %v", ErrEnvNotFound, err2)
 		}
 	}
 
-	MaxOpenConns, error := strconv.Atoi(os.Getenv("POSTGRES_MAX_OPEN_CONNS"))
-	if error != nil {
-		log.Println("ошибка при считывании POSTGRES_MAX_OPEN_CONNS из env", error)
+	MaxOpenConns, err := strconv.Atoi(os.Getenv("POSTGRES_MAX_OPEN_CONNS"))
+	if err != nil {
+		log.Println("ошибка при считывании POSTGRES_MAX_OPEN_CONNS из env", err)
 		MaxOpenConns = 10
+		log.Println("Установлено значение POSTGRES_MAX_OPEN_CONNS из env: ", MaxOpenConns)
 	}
-	DBMaxIdleConns, error := strconv.Atoi(os.Getenv("POSTGRES_MAX_IDLE_CONNS"))
-	if error != nil {
-		log.Println("ошибка при считывании POSTGRES_MAX_IDLE_CONNS из env", error)
+	DBMaxIdleConns, err := strconv.Atoi(os.Getenv("POSTGRES_MAX_IDLE_CONNS"))
+	if err != nil {
+		log.Println("ошибка при считывании POSTGRES_MAX_IDLE_CONNS из env", err)
 		DBMaxIdleConns = 10
+		log.Println("Установлено значение POSTGRES_MAX_IDLE_CONNS из env: ", DBMaxIdleConns)
 	}
-	DBMaxConnLifeTime, error := strconv.Atoi(os.Getenv("POSTGRES_CONN_MAX_LIFETIME"))
-	if error != nil {
-		log.Println("ошибка при считывании POSTGRES_CONN_MAX_LIFETIME из env", error)
+	DBMaxConnLifeTime, err := strconv.Atoi(os.Getenv("POSTGRES_CONN_MAX_LIFETIME"))
+	if err != nil {
+		log.Println("ошибка при считывании POSTGRES_CONN_MAX_LIFETIME из env", err)
 		DBMaxConnLifeTime = 10
+		log.Println("Установлено значение POSTGRES_CONN_MAX_LIFETIME из env: ", DBMaxConnLifeTime)
+	}
+
+	DBHost := os.Getenv("POSTGRES_HOST")
+	DBPort := os.Getenv("POSTGRES_PORT")
+	DBUser := os.Getenv("POSTGRES_USER")
+	DBPassword := os.Getenv("POSTGRES_PASSWORD")
+	DBName := os.Getenv("POSTGRES_DB")
+	DBSSLMode := os.Getenv("POSTGRES_SSLMODE")
+
+	if DBHost == "" || DBPort == "" || DBUser == "" || DBPassword == "" || DBName == "" {
+		return nil, fmt.Errorf("%w ", ErrParamNotFound)
 	}
 
 	return &DBConfig{
-		DBHost:            os.Getenv("POSTGRES_HOST"),
-		DBPort:            os.Getenv("POSTGRES_PORT"),
-		DBUser:            os.Getenv("POSTGRES_USER"),
-		DBPassword:        os.Getenv("POSTGRES_PASSWORD"),
-		DBName:            os.Getenv("POSTGRES_DB"),
-		DBSSLMode:         os.Getenv("POSTGRES_SSLMODE"),
+		DBHost:            DBHost,
+		DBPort:            DBPort,
+		DBUser:            DBUser,
+		DBPassword:        DBPassword,
+		DBName:            DBName,
+		DBSSLMode:         DBSSLMode,
 		DBMaxOpenConns:    MaxOpenConns,
 		DBMaxIdleConns:    DBMaxIdleConns,
 		DBMaxConnLifeTime: DBMaxConnLifeTime,
-	}
+	}, nil
+
 }

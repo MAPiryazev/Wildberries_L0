@@ -21,8 +21,13 @@ type OrderConsumer struct {
 	batchSize   int
 }
 
-func NewOrderConsumer(svc service.OrderService) *OrderConsumer {
-	kafkaConfig := config.LoadKafkaConfig()
+func NewOrderConsumer(svc service.OrderService) (*OrderConsumer, error) {
+	kafkaConfig, err := config.LoadKafkaConfig()
+	if err != nil {
+		//в данном случае обе ошибки которые могут прилететь из пакета config критические,
+		// мы просто должны передать любую из них наверх
+		return nil, err
+	}
 
 	return &OrderConsumer{
 		kafkaBroker: kafkaConfig.KafkaHost + ":" + strconv.Itoa(kafkaConfig.KafkaPort),
@@ -30,7 +35,7 @@ func NewOrderConsumer(svc service.OrderService) *OrderConsumer {
 		groupID:     kafkaConfig.KafkaGroupID,
 		orderSvc:    svc,
 		batchSize:   5000,
-	}
+	}, nil
 }
 
 func (consumer *OrderConsumer) fetchMessageBatch(ctx context.Context, reader *kafka.Reader, batchSize int) ([]kafka.Message, error) {

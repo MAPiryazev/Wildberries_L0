@@ -1,29 +1,34 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"os"
-	"strconv"
 
 	"github.com/joho/godotenv"
 )
 
+var (
+	ErrEnvNotFound = errors.New("Env файл не был найден")
+)
+
 type APIConfig struct {
-	APIPort int
+	APIPort string
 }
 
-func LoadAPIConfig() *APIConfig {
+func LoadAPIConfig() (*APIConfig, error) {
 	if err := godotenv.Load(".env"); err != nil {
 		if err2 := godotenv.Load("../environment/.env"); err2 != nil {
-			log.Fatalln("../environment/.env файл не найден: ", err2)
+			return nil, fmt.Errorf("%w: %v", ErrEnvNotFound, err2)
 		}
 	}
 
-	APIPort, err := strconv.Atoi(os.Getenv("API_PORT"))
-	if err != nil {
-		log.Println("ошибка считывания порта API", err)
-		APIPort = 8081
+	APIPort := os.Getenv("API_PORT")
+	if APIPort == "" {
+		log.Println("ошибка считывания порта API, используем порт 8081")
+		APIPort = "8081"
 	}
 
-	return &APIConfig{APIPort: APIPort}
+	return &APIConfig{APIPort: APIPort}, nil
 }

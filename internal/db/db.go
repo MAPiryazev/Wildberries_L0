@@ -10,9 +10,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
-func InitPsqlDB() *sql.DB {
-	cfg := config.LoadDBConfig()
-
+func InitPsqlDB(cfg *config.DBConfig) *sql.DB {
 	dsn := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, cfg.DBSSLMode,
