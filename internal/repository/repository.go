@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"errors"
 
 	models "github.com/MAPiryazev/Wildberries_L0/internal/model"
 )
@@ -192,7 +193,7 @@ func (orderRepo *orderRepo) GetOrderById(id string) (*models.Order, error) {
 		&order.DeliveryService,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err

@@ -30,7 +30,10 @@ func main() {
 		}
 	}
 
-	psqlDB := db.InitPsqlDB(DBConfig)
+	psqlDB, err := db.InitPsqlDB(DBConfig)
+	if err != nil {
+		log.Fatal("Ошибка инициализации БД: ", err)
+	}
 	defer psqlDB.Close()
 
 	orderRepo := repository.NewOrderRepo(psqlDB)

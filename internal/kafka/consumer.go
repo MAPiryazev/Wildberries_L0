@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"strconv"
 
@@ -44,7 +45,7 @@ func (consumer *OrderConsumer) fetchMessageBatch(ctx context.Context, reader *ka
 	for i := 0; i < batchSize; i++ {
 		msg, err := reader.FetchMessage(ctx)
 		if err != nil {
-			if err == context.Canceled || err == context.DeadlineExceeded {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				break
 			}
 			return messages, err

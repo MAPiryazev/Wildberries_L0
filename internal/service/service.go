@@ -21,6 +21,8 @@ type orderService struct {
 	mu    sync.RWMutex
 }
 
+var ErrOrderNotFound = errors.New("заказ не найден")
+
 func (orderService *orderService) GetOrderByID(id string) (*models.Order, error) {
 	orderService.mu.RLock()
 	if order, ok := orderService.cache[id]; ok {
@@ -35,7 +37,7 @@ func (orderService *orderService) GetOrderByID(id string) (*models.Order, error)
 		return nil, err
 	}
 	if order == nil {
-		return nil, errors.New("order not found")
+		return nil, ErrOrderNotFound
 	}
 	orderService.mu.Lock()
 	orderService.cache[id] = order

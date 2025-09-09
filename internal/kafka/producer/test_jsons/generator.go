@@ -29,7 +29,7 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 	gofakeit.Seed(time.Now().UnixNano())
 
-	writer.Write([]byte("[")) 
+	writer.Write([]byte("["))
 
 	for i := 0; i < totalOrders; i++ {
 		orderUID := "uid_" + strconv.Itoa(i)
@@ -102,7 +102,7 @@ func main() {
 		}
 
 		if i != 0 {
-			writer.Write([]byte(",")) 
+			writer.Write([]byte(","))
 		}
 		writer.Write(data)
 
@@ -112,7 +112,7 @@ func main() {
 		}
 	}
 
-	writer.Write([]byte("]")) 
+	writer.Write([]byte("]"))
 	writer.Flush()
 
 	log.Println("Генерация 3 млн заказов завершена!")
