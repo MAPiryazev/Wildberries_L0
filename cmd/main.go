@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/MAPiryazev/Wildberries_L0/internal/config"
 	"github.com/MAPiryazev/Wildberries_L0/internal/db"
@@ -13,6 +16,7 @@ import (
 	"github.com/MAPiryazev/Wildberries_L0/internal/kafka"
 	"github.com/MAPiryazev/Wildberries_L0/internal/repository"
 	"github.com/MAPiryazev/Wildberries_L0/internal/service"
+	"github.com/MAPiryazev/Wildberries_L0/internal/shutdown"
 )
 
 func main() {
@@ -72,9 +76,20 @@ func main() {
 	}
 	APIPort := APIConfig.APIPort
 
-	fmt.Println("Запускаем api на порту ", APIPort)
-	err = http.ListenAndServe(":"+APIPort, router)
-	if err != nil {
-		log.Fatal("Неудачный запуск api: ", err)
+	srv := &http.Server{
+		Addr:    ":" + APIPort,
+		Handler: router,
 	}
+	go func() {
+		fmt.Println("Запускаем API на порту", APIPort)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Panicln("Ошибка запуска API: ", err)
+		}
+	}()
+
+	rootContext, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	<-rootContext.Done()
+	shutdown.GracefulShutdown(cancel, srv, psqlDB)
 }
