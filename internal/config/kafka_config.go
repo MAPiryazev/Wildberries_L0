@@ -19,10 +19,11 @@ var (
 )
 
 type KafkaConfig struct {
-	KafkaPort      int
-	KafkaHost      string
-	KafkaTopicName string
-	KafkaGroupID   string
+	KafkaPort         int
+	KafkaHost         string
+	KafkaTopicName    string
+	KafkaGroupID      string
+	KafkaTopicDLQName string
 }
 
 func LoadKafkaConfig() (*KafkaConfig, error) {
@@ -41,15 +42,17 @@ func LoadKafkaConfig() (*KafkaConfig, error) {
 	KafkaHost := os.Getenv("KAFKA_HOST")
 	KafkaTopicName := os.Getenv("KAFKA_TOPIC_NAME")
 	KafkaGroupID := os.Getenv("KAFKA_GROUP_ID")
+	KafkaTopicDLQName := os.Getenv("KAFKA_DLQ_TOPIC_NAME")
 
-	if KafkaHost == "" || KafkaTopicName == "" || KafkaGroupID == "" {
+	if KafkaHost == "" || KafkaTopicName == "" || KafkaGroupID == "" || KafkaTopicDLQName == "" {
 		return nil, fmt.Errorf("%w ", ErrKafkaParamNotFound)
 	}
 
 	return &KafkaConfig{
-		KafkaPort:      kafkaPort,
-		KafkaHost:      KafkaHost,
-		KafkaTopicName: KafkaTopicName,
-		KafkaGroupID:   KafkaGroupID,
+		KafkaPort:         kafkaPort,
+		KafkaHost:         KafkaHost,
+		KafkaTopicName:    KafkaTopicName,
+		KafkaGroupID:      KafkaGroupID,
+		KafkaTopicDLQName: KafkaTopicDLQName,
 	}, nil
 }

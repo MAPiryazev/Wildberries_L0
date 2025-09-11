@@ -12,11 +12,13 @@ import (
 	"github.com/MAPiryazev/Wildberries_L0/internal/config"
 	models "github.com/MAPiryazev/Wildberries_L0/internal/model"
 	"github.com/MAPiryazev/Wildberries_L0/internal/service"
+	"github.com/MAPiryazev/Wildberries_L0/internal/validation"
 )
 
 type OrderConsumer struct {
 	kafkaBroker string
 	topic       string
+	DLQTopic    string
 	groupID     string
 	orderSvc    service.OrderService
 	batchSize   int
@@ -33,10 +35,34 @@ func NewOrderConsumer(svc service.OrderService) (*OrderConsumer, error) {
 	return &OrderConsumer{
 		kafkaBroker: kafkaConfig.KafkaHost + ":" + strconv.Itoa(kafkaConfig.KafkaPort),
 		topic:       kafkaConfig.KafkaTopicName,
+		DLQTopic:    kafkaConfig.KafkaTopicDLQName,
 		groupID:     kafkaConfig.KafkaGroupID,
 		orderSvc:    svc,
 		batchSize:   5000,
 	}, nil
+}
+
+func (consumer *OrderConsumer) ensureTopicExists(topic string) error {
+	conn, err := kafka.Dial("tcp", consumer.kafkaBroker)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	partitions, err := conn.ReadPartitions()
+	if err != nil {
+		return err
+	}
+	for _, p := range partitions {
+		if p.Topic == topic {
+			return nil
+		}
+	}
+	return conn.CreateTopics(kafka.TopicConfig{
+		Topic:             topic,
+		NumPartitions:     1,
+		ReplicationFactor: 1,
+	})
 }
 
 func (consumer *OrderConsumer) fetchMessageBatch(ctx context.Context, reader *kafka.Reader, batchSize int) ([]kafka.Message, error) {
@@ -57,6 +83,14 @@ func (consumer *OrderConsumer) fetchMessageBatch(ctx context.Context, reader *ka
 }
 
 func (consumer *OrderConsumer) Start(ctx context.Context) {
+	if err := consumer.ensureTopicExists(consumer.topic); err != nil {
+		log.Fatalf("Не удалось создать топик %s: %v", consumer.topic, err)
+	}
+
+	if err := consumer.ensureTopicExists(consumer.DLQTopic); err != nil {
+		log.Fatalf("Не удалось создать топик DLQ %s: %v", consumer.DLQTopic, err)
+	}
+
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers: []string{consumer.kafkaBroker},
 		GroupID: consumer.groupID,
@@ -87,17 +121,14 @@ func (consumer *OrderConsumer) Start(ctx context.Context) {
 				var order models.Order
 				if err := json.Unmarshal(msg.Value, &order); err != nil {
 					log.Printf("Ошибка десериализации json сообщения: %v", err)
+					_ = consumer.orderSvc.SendToDLQ(ctx, msg.Value, err.Error())
 					continue
 				}
 
-				if len(order.Locale) > 10 {
-					log.Printf("locale слишком длинный (%d символов): '%s'", len(order.Locale), order.Locale)
-				}
-
-				for _, item := range order.Items {
-					if len(item.Size) > 10 {
-						log.Printf("item.size слишком длинный (%d символов): '%s'", len(item.Size), item.Size)
-					}
+				if err := validation.ValidateOrder(&order); err != nil {
+					log.Printf("Ошибка валидации заказа: %v", err)
+					_ = consumer.orderSvc.SendToDLQ(ctx, msg.Value, err.Error())
+					continue
 				}
 
 				orders = append(orders, &order)

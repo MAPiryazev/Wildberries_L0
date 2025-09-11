@@ -17,6 +17,7 @@ import (
 	"github.com/MAPiryazev/Wildberries_L0/internal/repository"
 	"github.com/MAPiryazev/Wildberries_L0/internal/service"
 	"github.com/MAPiryazev/Wildberries_L0/internal/shutdown"
+	kgo "github.com/segmentio/kafka-go"
 )
 
 func main() {
@@ -41,7 +42,14 @@ func main() {
 	defer psqlDB.Close()
 
 	orderRepo := repository.NewOrderRepo(psqlDB)
-	orderService, err := service.NewOrderService(orderRepo, 100)
+
+	dlqWriter := &kgo.Writer{
+		Addr:     kgo.TCP("localhost:29092"),
+		Topic:    "orders_DLQ",
+		Balancer: &kgo.LeastBytes{},
+	}
+
+	orderService, err := service.NewOrderService(orderRepo, 100, dlqWriter)
 	if err != nil {
 		log.Fatal(err)
 	}
