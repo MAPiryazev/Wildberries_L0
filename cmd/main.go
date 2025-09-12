@@ -17,7 +17,6 @@ import (
 	"github.com/MAPiryazev/Wildberries_L0/internal/repository"
 	"github.com/MAPiryazev/Wildberries_L0/internal/service"
 	"github.com/MAPiryazev/Wildberries_L0/internal/shutdown"
-	kgo "github.com/segmentio/kafka-go"
 )
 
 func main() {
@@ -43,13 +42,19 @@ func main() {
 
 	orderRepo := repository.NewOrderRepo(psqlDB)
 
-	dlqWriter := &kgo.Writer{
-		Addr:     kgo.TCP("localhost:29092"),
-		Topic:    "orders_DLQ",
-		Balancer: &kgo.LeastBytes{},
+	kafkaConfig, err := config.LoadKafkaConfig()
+	if err != nil {
+		switch {
+		case errors.Is(err, config.ErrEnvNotFound):
+			log.Panicln(err)
+		case errors.Is(err, config.ErrParamNotFound):
+			log.Panicln("Не все параметры подключения к Кафке были распознаны", err)
+		default:
+			log.Panicln("Неизвестная ошибка при получении конфига Кафки: ", err)
+		}
 	}
 
-	orderService, err := service.NewOrderService(orderRepo, 100, dlqWriter)
+	orderService, err := service.NewOrderService(orderRepo, 100, kafkaConfig)
 	if err != nil {
 		log.Fatal(err)
 	}

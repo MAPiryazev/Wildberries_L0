@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"strconv"
 	"time"
 
-	"github.com/segmentio/kafka-go"
-
+	"github.com/MAPiryazev/Wildberries_L0/internal/config"
 	models "github.com/MAPiryazev/Wildberries_L0/internal/model"
 	"github.com/MAPiryazev/Wildberries_L0/internal/repository"
+	"github.com/segmentio/kafka-go"
 )
 
 const MAX_CACHE_SIZE = 1000
@@ -124,7 +125,7 @@ func (s *orderService) SendToDLQ(ctx context.Context, original []byte, errMsg st
 	return nil
 }
 
-func NewOrderService(repo repository.OrderRepository, preloadCount int, dlqWriter *kafka.Writer) (OrderService, error) {
+func NewOrderService(repo repository.OrderRepository, preloadCount int, kafkaConfig *config.KafkaConfig) (OrderService, error) {
 	LRUCache := NewLRUCache(MAX_CACHE_SIZE)
 
 	if preloadCount > 0 {
@@ -135,6 +136,12 @@ func NewOrderService(repo repository.OrderRepository, preloadCount int, dlqWrite
 		for _, order := range orders {
 			LRUCache.Put(order)
 		}
+	}
+
+	dlqWriter := &kafka.Writer{
+		Addr:     kafka.TCP("localhost:" + strconv.Itoa(kafkaConfig.KafkaPort)),
+		Topic:    kafkaConfig.KafkaTopicDLQName,
+		Balancer: &kafka.LeastBytes{},
 	}
 
 	return &orderService{
