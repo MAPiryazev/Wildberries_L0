@@ -1,84 +1,132 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"log"
-	"sync"
+	"strconv"
+	"time"
 
+	"github.com/MAPiryazev/Wildberries_L0/internal/config"
 	models "github.com/MAPiryazev/Wildberries_L0/internal/model"
 	"github.com/MAPiryazev/Wildberries_L0/internal/repository"
+	"github.com/segmentio/kafka-go"
 )
+
+const MAX_CACHE_SIZE = 1000
 
 type OrderService interface {
 	GetOrderByID(id string) (*models.Order, error)
 	SaveOrder(order *models.Order) error
 	SaveOrdersBatch(orders []*models.Order) error
+	SendToDLQ(ctx context.Context, original []byte, errMsg string) error
 }
 
 type orderService struct {
-	repo  repository.OrderRepository
-	cache map[string]*models.Order
-	mu    sync.RWMutex
+	repo      repository.OrderRepository
+	cache     *LRUCache
+	dlqWriter *kafka.Writer
 }
 
+var ErrOrderNotFound = errors.New("заказ не найден")
+
 func (orderService *orderService) GetOrderByID(id string) (*models.Order, error) {
-	orderService.mu.RLock()
-	if order, ok := orderService.cache[id]; ok {
-		orderService.mu.RUnlock()
-		log.Println("Заказ ", order.OrderUID, " нашелся в кэше")
+	order, ok := orderService.cache.Get(id)
+	if ok {
+		log.Println("Заказ нашелся в кэше")
 		return order, nil
 	}
-	orderService.mu.RUnlock()
 
 	order, err := orderService.repo.GetOrderById(id)
 	if err != nil {
 		return nil, err
 	}
 	if order == nil {
-		return nil, errors.New("order not found")
+		return nil, ErrOrderNotFound
 	}
-	orderService.mu.Lock()
-	orderService.cache[id] = order
-	orderService.mu.Unlock()
+	orderService.cache.Put(order)
 
 	return order, nil
 }
 
-func (orderService *orderService) SaveOrder(order *models.Order) error {
-	err := orderService.repo.SaveOrder(order)
+func (s *orderService) SaveOrder(order *models.Order) error {
+	err := s.repo.SaveOrder(order)
 	if err != nil {
+		dlqErr := s.SendToDLQ(context.Background(), marshalOrder(order), err.Error())
+		if dlqErr != nil {
+			log.Printf("Ошибка при отправке заказа в DLQ: %v", dlqErr)
+		}
 		return err
 	}
-	orderService.mu.Lock()
-	defer orderService.mu.Unlock()
-	orderService.cache[order.OrderUID] = order
 
+	s.cache.Put(order)
 	return nil
 }
 
-func (orderService *orderService) SaveOrdersBatch(orders []*models.Order) error {
+func (s *orderService) SaveOrdersBatch(orders []*models.Order) error {
 	if len(orders) == 0 {
 		return nil
 	}
 
-	if err := orderService.repo.SaveOrdersBatch(orders); err != nil {
+	err := s.repo.SaveOrdersBatch(orders)
+	if err != nil {
+		for _, order := range orders {
+			if order == nil {
+				continue
+			}
+			dlqErr := s.SendToDLQ(context.Background(), marshalOrder(order), err.Error())
+			if dlqErr != nil {
+				log.Printf("Ошибка при отправке заказа в DLQ: %v", dlqErr)
+			}
+		}
 		return err
 	}
 
-	orderService.mu.Lock()
 	for _, order := range orders {
 		if order == nil {
 			continue
 		}
-		orderService.cache[order.OrderUID] = order
+		s.cache.Put(order)
 	}
-	orderService.mu.Unlock()
 
 	return nil
 }
 
-func NewOrderService(repo repository.OrderRepository, preloadCount int) (OrderService, error) {
-	cache := make(map[string]*models.Order)
+// вспомогательная функция для сериализации заказа
+func marshalOrder(order *models.Order) []byte {
+	data, err := json.Marshal(order)
+	if err != nil {
+		return []byte("cannot marshal order")
+	}
+	return data
+}
+
+func (s *orderService) SendToDLQ(ctx context.Context, original []byte, errMsg string) error {
+	dlqMsg := models.DLQMessage{
+		OriginalValue: original,
+		Error:         errMsg,
+		Timestamp:     time.Now(),
+	}
+
+	data, err := json.Marshal(dlqMsg)
+	if err != nil {
+		return err
+	}
+
+	err = s.dlqWriter.WriteMessages(ctx, kafka.Message{
+		Value: data,
+	})
+	if err != nil {
+		log.Printf("ошибка при записи в DLQ: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func NewOrderService(repo repository.OrderRepository, preloadCount int, kafkaConfig *config.KafkaConfig) (OrderService, error) {
+	LRUCache := NewLRUCache(MAX_CACHE_SIZE)
 
 	if preloadCount > 0 {
 		orders, err := repo.GetLastNOrders(preloadCount)
@@ -86,12 +134,19 @@ func NewOrderService(repo repository.OrderRepository, preloadCount int) (OrderSe
 			return nil, err
 		}
 		for _, order := range orders {
-			cache[order.OrderUID] = order
+			LRUCache.Put(order)
 		}
 	}
 
+	dlqWriter := &kafka.Writer{
+		Addr:     kafka.TCP("localhost:" + strconv.Itoa(kafkaConfig.KafkaPort)),
+		Topic:    kafkaConfig.KafkaTopicDLQName,
+		Balancer: &kafka.LeastBytes{},
+	}
+
 	return &orderService{
-		repo:  repo,
-		cache: cache,
+		repo:      repo,
+		cache:     LRUCache,
+		dlqWriter: dlqWriter,
 	}, nil
 }

@@ -3,16 +3,13 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/MAPiryazev/Wildberries_L0/internal/config"
 	_ "github.com/lib/pq"
 )
 
-func InitPsqlDB() *sql.DB {
-	cfg := config.LoadDBConfig()
-
+func InitPsqlDB(cfg *config.DBConfig) (*sql.DB, error) {
 	dsn := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, cfg.DBSSLMode,
@@ -20,7 +17,7 @@ func InitPsqlDB() *sql.DB {
 
 	psqlDB, err := sql.Open("postgres", dsn)
 	if err != nil {
-		log.Fatal("Ошибка подключения к БД: ", err)
+		return nil, fmt.Errorf("Ошибка подключения к БД: %w", err)
 	}
 
 	psqlDB.SetMaxOpenConns(cfg.DBMaxOpenConns)
@@ -28,9 +25,9 @@ func InitPsqlDB() *sql.DB {
 	psqlDB.SetConnMaxLifetime(time.Duration(cfg.DBMaxConnLifeTime) * time.Minute)
 
 	if err = psqlDB.Ping(); err != nil {
-		log.Fatal("Не удалось подключиться к БД: ", err)
+		psqlDB.Close()
+		return nil, fmt.Errorf("Не удалось проверить соединение с БД: %w", err)
 	}
 
-	log.Println("Подключение к БД успешно создано")
-	return psqlDB
+	return psqlDB, nil
 }

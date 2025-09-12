@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -41,10 +42,17 @@ func (handler *Handler) handleGetOrderByID(w http.ResponseWriter, r *http.Reques
 
 	order, err := handler.orderService.GetOrderByID(uid)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		if errors.Is(err, service.ErrOrderNotFound) {
+			http.Error(w, "заказ не найден", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "внутренняя ошибка сервера", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(order)
+	if err := json.NewEncoder(w).Encode(order); err != nil {
+		http.Error(w, "ошибка кодирования ответа", http.StatusInternalServerError)
+		return
+	}
 }
